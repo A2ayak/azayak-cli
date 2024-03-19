@@ -1,0 +1,1 @@
+# azayak-cli-test
