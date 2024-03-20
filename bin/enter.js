@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// console.log('Hello')
-
 // enter
 const { program } = require('commander') // 总commander
 const chalk = require('chalk') // 高亮
@@ -12,6 +10,7 @@ const path = require('path')
 const downloadGitRepo = require('download-git-repo')
 const ora = require('ora')
 const fs = require('fs-extra')
+const { getRepo } = require('../lib/api')
 
 // 解析用户执行时输入的参数
 // process.argv 是 nodejs 提供的属性
@@ -19,17 +18,6 @@ const fs = require('fs-extra')
 // 后面的 --port 3000 就是用户输入的参数
 
 program.name('azayak-cli').usage(`<command> [option]`).version(`cli-version ${setting.version}`)
-program.option('--first')
-
-// program
-//   .command('create <project-name>') // 增加创建指令
-//   .description('create a new project') // 添加描述信息
-//   .option('-f, --force', 'overwrite target directory if it exists') // 强制覆盖
-//   .action((projectName, cmd) => {
-//     // 处理用户输入create 指令附加的参数
-//     // 引入 create 模块，并传入参数
-//     require('../lib/create')(projectName, cmd)
-//   })
 
 program
   .command('config [value]') // config 命令
@@ -83,12 +71,33 @@ program
     console.log('项目名称：', projectName)
     // 4. 如果用户没有传入模板参数
     if (!projectTemplate) {
+      const { isUseOnlineRepoList } = await Inquirer.prompt({
+        type: 'confirm',
+        name: 'isUseOnlineRepoList',
+        message: '是否使用Github上的模板？'
+      })
+      let onlineTemplates = []
+      if (isUseOnlineRepoList) {
+        const getRepoLoading = ora('正在从github获取模板...')
+        try {
+          getRepoLoading.start()
+          const res = await getRepo()
+          onlineTemplates = res
+            .filter(({ name }) => name.indexOf('template') !== -1)
+            .map(({ name }) => ({
+              name,
+              value: `github:A2ayak/${name}#main`
+            }))
+        } finally {
+          getRepoLoading.stop()
+        }
+      }
       // 新增选择模版代码
       const { template } = await Inquirer.prompt({
         type: 'list',
         name: 'template',
         message: '请选择模版：',
-        choices: templates // 模版列表
+        choices: isUseOnlineRepoList && !!onlineTemplates.length ? onlineTemplates : templates // 模版列表
       })
       projectTemplate = template
     }
@@ -111,38 +120,11 @@ program
     downloadGitRepo(projectTemplate, targetPath, { clone: true }, (err) => {
       loading.stop()
       if (err) {
-        console.log(`${chalk.bgRedBright('拉取模板失败')}`, err)
+        console.log(`${chalk.black.bgRedBright('拉取模板失败')}`, err)
       } else {
-        console.log(`${chalk.bgGreenBright('拉取模板成功')}`)
+        console.log(`${chalk.black.bgGreenBright('拉取模板成功')}`)
       }
     })
   })
 
 program.parse(process.argv)
-
-// new Inquirer.prompt([
-//   {
-//     name: "options",
-//     // 多选交互功能
-//     // 单选将这里修改为 list 即可
-//     type: "checkbox",
-//     message: "Check the features needed for your project:",
-//     choices: [
-//       {
-//         name: "Babel",
-//         checked: true,
-//       },
-//       {
-//         name: "TypeScript",
-//       },
-//       {
-//         name: "Progressive Web App (PWA) Support",
-//       },
-//       {
-//         name: "Router",
-//       },
-//     ],
-//   },
-// ]).then((data) => {
-//   console.log(data);
-// });
